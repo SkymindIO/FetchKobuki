@@ -1,0 +1,17 @@
+<launch>
+    <arg name="robot_name"/>
+    <arg name="init_pose"/>
+    
+    <param name="robot_name" value=  "$(arg robot_name)" />
+    <node name="spawn_minibot_model" pkg="gazebo_ros" type="spawn_model"
+			args="$(arg init_pose) -unpause -urdf -param /kobuki/robot_description -model $(arg robot_name)
+     -robotNamespace $(arg robot_name) -namespace $(arg robot_name)"/>
+
+    <node pkg="robot_state_publisher" type="robot_state_publisher" 
+          name="robot_state_publisher">
+       <param name="publish_frequency" type="double" value="100.0" />
+    </node>
+    <!-- The odometry estimator, throttling, fake laser etc. go here -->
+    <!-- All the stuff as from usual robot launch file -->
+</launch>
+

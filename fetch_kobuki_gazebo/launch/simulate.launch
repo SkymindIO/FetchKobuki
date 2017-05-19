@@ -1,0 +1,22 @@
+<launch>
+  <param name="/use_sim_time" value="true" />
+  
+  <env name="GAZEBO_MODEL_PATH" value="$(find fetch_gazebo)/models:$(optenv GAZEBO_MODEL_PATH)" />
+  <arg name="debug" default="false"/>
+  <arg name="gui" default="true"/>
+  <arg name="headless" default="false"/>
+  
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="debug" value="$(arg debug)" />
+    <arg name="gui" value="$(arg gui)" />
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="true"/>
+    <arg name="headless" value="$(arg headless)"/>
+    <arg name="world_name" value="$(find fetch_kobuki_gazebo)/worlds/SB_world.sdf"/>
+  </include>
+  <!-- include our robots -->
+  <include file="$(find fetch_kobuki_gazebo)/launch/robots.launch"/>
+<node name="rviz" pkg="rviz" type="rviz" required="true"
+	   args="-d $(find fetch_kobuki_gazebo)/config/display.rviz" />
+  <include file="$(find fetch_kobuki_gazebo)/launch/oprate/random_walker.launch"></include>
+</launch>
