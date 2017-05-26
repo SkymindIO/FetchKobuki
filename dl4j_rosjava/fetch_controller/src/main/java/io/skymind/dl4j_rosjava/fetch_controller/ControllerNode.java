@@ -41,7 +41,43 @@ import org.ros.node.topic.Subscriber;
  */
 public class ControllerNode extends AbstractNodeMain {
 
-    private static final DecimalFormat df = new DecimalFormat("0.00");
+    private final DecimalFormat df = new DecimalFormat("0.00");
+
+    double linearVelocity;
+    double angularVelocity;
+    float[][] laserRanges;
+
+    double kobukiDistance;
+    double wallDistance;
+
+    double[] middlePose, fetchPose, kobukiPose;
+
+    void setLinearVelocity(double linearVelocity) {
+        this.linearVelocity = linearVelocity;
+    }
+    void setAngularVelocity(double angularVelocity) {
+        this.angularVelocity = angularVelocity;
+    }
+    float[][] getLaserRanges() {
+        return laserRanges;
+    }
+
+    double getKobukiDistance() {
+        return kobukiDistance;
+    }
+    double getWallDistance() {
+        return wallDistance;
+    }
+
+    double[] getMiddlePose() {
+        return middlePose;
+    }
+    void setFetchPose(double... pose) {
+        fetchPose = pose;
+    }
+    void setKobukiPose(double... pose) {
+        kobukiPose = pose;
+    }
 
     @Override
     public GraphName getDefaultNodeName() {
@@ -53,8 +89,18 @@ public class ControllerNode extends AbstractNodeMain {
         final Log log = connectedNode.getLog();
         Subscriber<sensor_msgs.LaserScan> subscriber = connectedNode.newSubscriber("base_scan", sensor_msgs.LaserScan._TYPE);
         subscriber.addMessageListener(new MessageListener<sensor_msgs.LaserScan>() {
+            long lastTime = System.currentTimeMillis();
+
             @Override
             public void onNewMessage(sensor_msgs.LaserScan message) {
+                // we get no time stats from this message, but we know Fetch is publishing at 15 Hz
+                long time = System.currentTimeMillis();
+                log.trace("scan times: " + message.getTimeIncrement() + " " + message.getScanTime() + " " + (time - lastTime));
+                lastTime = time;
+
+                laserRanges = new float[][] { message.getRanges(),
+                        laserRanges != null && laserRanges[0] != null ? laserRanges[0] : null };
+
                 String ranges = "[";
                 for (float range : message.getRanges()) {
                     if (ranges.length() > 1) {
@@ -63,12 +109,15 @@ public class ControllerNode extends AbstractNodeMain {
                     ranges += df.format(range);
                 }
                 ranges += "]";
-                log.info("ranges: " + ranges);
+                log.trace("ranges: " + ranges);
             }
         });
 
         Subscriber<gazebo_msgs.ModelStates> subscriber2 = connectedNode.newSubscriber("gazebo/model_states", gazebo_msgs.ModelStates._TYPE);
         subscriber2.addMessageListener(new MessageListener<gazebo_msgs.ModelStates>() {
+            org.ros.rosjava_geometry.Vector3 referenceAxis
+                    = new org.ros.rosjava_geometry.Vector3(0.0, 1.0, 0.0);
+
             @Override
             public void onNewMessage(gazebo_msgs.ModelStates message) {
                 int count = 0, wallCount = 0;
@@ -87,7 +136,7 @@ public class ControllerNode extends AbstractNodeMain {
                     names += name + ", ";
                     count++;
                 }
-                log.info("names: " + names);
+                log.trace("names: " + names);
 
                 count = 0;
                 Pose fetchPose = null, kobukiPose = null;
@@ -113,21 +162,23 @@ public class ControllerNode extends AbstractNodeMain {
                           + ", " + df.format(q.getW()) + "]";
                     count++;
                 }
-                log.info("poses: " + poses);
+                log.trace("poses: " + poses);
 
                 double x1 = fetchPose.getPosition().getX();
                 double y1 = fetchPose.getPosition().getY();
                 double x2 = kobukiPose.getPosition().getX();
                 double y2 = kobukiPose.getPosition().getY();
                 double kobukiDist = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
-                log.info("kobukiDist: " + df.format(kobukiDist));
+                log.trace("kobukiDist: " + df.format(kobukiDist));
+                kobukiDistance = kobukiDist;
 
                 count = 0;
                 double[] wallDists = new double[4];
-                org.ros.rosjava_geometry.Vector3 referenceAxis
-                        = new org.ros.rosjava_geometry.Vector3(0.0, 1.0, 0.0);
+                middlePose = new double[2];
                 for (Pose wallPose : wallPoses) {
                     Point p = wallPose.getPosition();
+                    middlePose[0] += p.getX();
+                    middlePose[1] += p.getY();
                     org.ros.rosjava_geometry.Vector3 p2
                             = new org.ros.rosjava_geometry.Vector3(p.getX(), p.getY(), p.getZ());
                     Quaternion q = wallPose.getOrientation();
@@ -143,8 +194,11 @@ public class ControllerNode extends AbstractNodeMain {
                     wallDists[count] = Math.abs(a * x1 + b * y1 + d);// / Math.sqrt(a * a + b * b);
                     count++;
                 }
-                log.info("wallDists: [" + df.format(wallDists[0]) + ", " + df.format(wallDists[1])
-                                 + ", " + df.format(wallDists[2]) + ", " + df.format(wallDists[3]) + "]");
+                middlePose[0] /= 4;
+                middlePose[1] /= 4;
+                log.trace("wallDists: [" + df.format(wallDists[0]) + ", " + df.format(wallDists[1])
+                                  + ", " + df.format(wallDists[2]) + ", " + df.format(wallDists[3]) + "]");
+                wallDistance = Math.min(wallDists[0], Math.min(wallDists[1], Math.min(wallDists[2], wallDists[3])));
 
             }
         });
@@ -163,12 +217,52 @@ public class ControllerNode extends AbstractNodeMain {
 
             @Override
             protected void loop() throws InterruptedException {
-                geometry_msgs.Twist msg = publisher.newMessage();
-                geometry_msgs.Vector3 lin = msg.getLinear();
-                lin.setX(10.0 / sequenceNumber);
-                publisher.publish(msg);
+                geometry_msgs.Twist message = publisher.newMessage();
+                geometry_msgs.Vector3 linear = message.getLinear();
+                geometry_msgs.Vector3 angular = message.getAngular();
+//                linear.setX(10.0 / sequenceNumber);
+//                angular.setZ(10.0 / sequenceNumber);
+                linear.setX(linearVelocity);
+                angular.setZ(angularVelocity);
+                log.trace("velocity linear: " + message.getLinear().getX() + " angular:" + message.getAngular().getZ());
+                publisher.publish(message);
                 sequenceNumber++;
-                Thread.sleep(1000);
+                Thread.sleep(100);
+            }
+        });
+
+        final Publisher<gazebo_msgs.ModelState> publisher2 =
+                connectedNode.newPublisher("gazebo/set_model_state", gazebo_msgs.ModelState._TYPE);
+        connectedNode.executeCancellableLoop(new CancellableLoop() {
+            org.ros.rosjava_geometry.Vector3 referenceAxis
+                    = new org.ros.rosjava_geometry.Vector3(0.0, 0.0, 1.0);
+
+            @Override
+            protected void loop() throws InterruptedException {
+                if (fetchPose != null) {
+                    gazebo_msgs.ModelState message = publisher2.newMessage();
+                    message.setModelName("fetch");
+                    Pose pose = message.getPose();
+                    Point p = pose.getPosition();
+                    Quaternion q = pose.getOrientation();
+                    p.setX(fetchPose[0]);
+                    p.setY(fetchPose[1]);
+                    org.ros.rosjava_geometry.Quaternion.fromAxisAngle(referenceAxis, fetchPose[2]).toQuaternionMessage(q);
+                    publisher2.publish(message);
+                    fetchPose = null;
+                } else if (kobukiPose != null) {
+                    gazebo_msgs.ModelState message = publisher2.newMessage();
+                    message.setModelName("kobuki");
+                    Pose pose = message.getPose();
+                    Point p = pose.getPosition();
+                    Quaternion q = pose.getOrientation();
+                    p.setX(kobukiPose[0]);
+                    p.setY(kobukiPose[1]);
+                    org.ros.rosjava_geometry.Quaternion.fromAxisAngle(referenceAxis, kobukiPose[2]).toQuaternionMessage(q);
+                    publisher2.publish(message);
+                    kobukiPose = null;
+                }
+                Thread.sleep(100);
             }
         });
     }

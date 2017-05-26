@@ -37,4 +37,10 @@ dependencies {
   compile 'org.ros.rosjava_messages:gazebo_msgs:2.4.13'
   compile 'org.ros.rosjava_messages:sensor_msgs:1.11.9'
   compile group: 'org.deeplearning4j', name: 'rl4j-core', version: '0.8.0'
+  compile group: 'org.nd4j', name: 'nd4j-native-platform', version: '0.8.0'
+}
+
+task execute(type:JavaExec) {
+   main = mainClassName
+   classpath = sourceSets.main.runtimeClasspath
 }
