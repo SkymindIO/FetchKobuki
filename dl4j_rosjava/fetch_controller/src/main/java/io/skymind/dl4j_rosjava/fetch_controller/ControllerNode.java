@@ -51,6 +51,7 @@ public class ControllerNode extends AbstractNodeMain {
     double wallDistance;
 
     double[] middlePose, fetchPose, kobukiPose;
+    double[] lastFetchPose, lastKobukiPose;
 
     void setLinearVelocity(double linearVelocity) {
         this.linearVelocity = linearVelocity;
@@ -168,6 +169,9 @@ public class ControllerNode extends AbstractNodeMain {
                 double y1 = fetchPose.getPosition().getY();
                 double x2 = kobukiPose.getPosition().getX();
                 double y2 = kobukiPose.getPosition().getY();
+                lastFetchPose = new double[] { x1, y1 };
+                lastKobukiPose = new double[] { x2, y2 };
+
                 double kobukiDist = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
                 log.trace("kobukiDist: " + df.format(kobukiDist));
                 kobukiDistance = kobukiDist;

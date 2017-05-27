@@ -36,7 +36,7 @@ public class TrainingMain {
                     1,              //Number of threads
                     5,              //t_max
                     10,             //num step noop warmup
-                    0.01,           //reward scaling
+                    1.0,            //reward scaling
                     0.99,           //gamma
                     10.0            //td-error clipping
             );

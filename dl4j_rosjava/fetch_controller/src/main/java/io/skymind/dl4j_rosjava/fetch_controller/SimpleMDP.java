@@ -67,6 +67,7 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
     protected final double KOBUKI_MIN_DISTANCE = 0.5; // m
     protected final double WALL_MIN_DISTANCE = 0.5; // m
     protected final long LATENCY = 500; // ms
+    protected final int MAX_STEPS = 100;
 
     protected ControllerNode controllerNode;
     protected NodeConfiguration nodeConfiguration;
@@ -77,6 +78,7 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
     protected boolean done;
     protected long randomSeed;
     protected Random random;
+    protected int step;
 
     private final Log log = LogFactory.getLog(SimpleMDP.class);
     private final DecimalFormat df = new DecimalFormat("0.00");
@@ -101,6 +103,7 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
         done = false;
         randomSeed = seed;
         random = new Random(seed);
+        step = 0;
     }
 
     @Override
@@ -122,29 +125,39 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
 
     @Override
     public Observation reset() {
-        double[] fetchPose = randomPose();
-        double[] kobukiPose = randomPose();
-        double dx = fetchPose[0] - kobukiPose[0];
-        double dy = fetchPose[1] - kobukiPose[1];
-        while (dx * dx + dy * dy < KOBUKI_MIN_DISTANCE * KOBUKI_MIN_DISTANCE) {
-            fetchPose = randomPose();
-            kobukiPose = randomPose();
-            dx = fetchPose[0] - kobukiPose[0];
-            dy = fetchPose[1] - kobukiPose[1];
-        }
-        controllerNode.setFetchPose(fetchPose);
-        controllerNode.setKobukiPose(kobukiPose);
-        done = false;
-        return step(0).getObservation();
+        Observation o;
+        do {
+            double[] fetchPose = randomPose();
+            double[] kobukiPose = randomPose();
+            double dx = fetchPose[0] - kobukiPose[0];
+            double dy = fetchPose[1] - kobukiPose[1];
+            while (dx * dx + dy * dy <= KOBUKI_MIN_DISTANCE * KOBUKI_MIN_DISTANCE) {
+                fetchPose = randomPose();
+                kobukiPose = randomPose();
+                dx = fetchPose[0] - kobukiPose[0];
+                dy = fetchPose[1] - kobukiPose[1];
+            }
+            controllerNode.setFetchPose(fetchPose);
+            controllerNode.setKobukiPose(kobukiPose);
+            done = false;
+            step = 0;
+            o = step(0).getObservation();
+        } while (done);
+
+        return o;
     }
 
     @Override
     public void close() {
         nodeMainExecutor.shutdown();
+        nodeMainExecutor = null;
     }
 
     @Override
     public StepReply<Observation> step(Integer a) {
+        if (nodeMainExecutor == null) {
+            return null;
+        }
         double linearVelocity = LINEAR_VELOCITIES[a % LINEAR_VELOCITIES.length];
         double angularVelocity = ANGULAR_VELOCITIES[a / ANGULAR_VELOCITIES.length];
         controllerNode.setLinearVelocity(linearVelocity);
@@ -156,17 +169,23 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
             Thread.currentThread().interrupt();
         }
 
-        double reward = 0;
+        double reward = -0.01;
         float[][] ranges = controllerNode.getLaserRanges();
-        if (controllerNode.getKobukiDistance() <= KOBUKI_MIN_DISTANCE) {
+        double kobukiDistance = controllerNode.getKobukiDistance();
+        double wallDistance = controllerNode.getWallDistance();
+        if (kobukiDistance <= KOBUKI_MIN_DISTANCE) {
             reward = 1;
             done = true;
-        } else if (controllerNode.getWallDistance() <= WALL_MIN_DISTANCE) {
+        } else if (wallDistance <= WALL_MIN_DISTANCE) {
             reward = -1;
             done = true;
+        } else if (step >= MAX_STEPS) {
+            done = true;
         }
-        log.info("step action: " + a + " (" + df.format(linearVelocity)+ ", " + df.format(angularVelocity) + ")"
+        log.info("step: " + step + " action: " + a + " (" + df.format(linearVelocity)+ ", " + df.format(angularVelocity) + ")"
+                + " kobukiDistance: " + df.format(kobukiDistance) + " wallDistance: " + df.format(wallDistance)
                 + " reward: " + reward + " done: " + done);
+        step++;
         return new StepReply(new Observation(linearVelocity, angularVelocity, ranges), reward, done, null);
     }
 
@@ -177,6 +196,9 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
 
     @Override
     public MDP<Observation, Integer, DiscreteSpace> newInstance() {
+        // shut down this node to avoid interference with the single simulator
+        nodeMainExecutor.shutdown();
+        nodeMainExecutor = null;
         return new SimpleMDP(randomSeed);
     }
 
