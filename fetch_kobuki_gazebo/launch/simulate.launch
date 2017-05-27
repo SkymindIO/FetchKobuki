@@ -16,7 +16,7 @@
   </include>
   <!-- include our robots -->
   <include file="$(find fetch_kobuki_gazebo)/launch/robots.launch"/>
-<node name="rviz" pkg="rviz" type="rviz" required="true"
+<node name="rviz" pkg="rviz" type="rviz" required="false"
 	   args="-d $(find fetch_kobuki_gazebo)/config/display.rviz" />
   <include file="$(find fetch_kobuki_gazebo)/launch/oprate/random_walker.launch"></include>
 </launch>
