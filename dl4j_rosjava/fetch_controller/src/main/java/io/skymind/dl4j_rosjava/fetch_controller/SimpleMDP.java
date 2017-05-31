@@ -41,19 +41,21 @@ import org.ros.node.NodeMainExecutor;
 public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSpace> {
 
     public static class Observation implements Encodable {
-        protected final int NUM_RANGES = 15;
+        protected final int NUM_RANGES = 5; // subsampled from 662 values
+        protected final double MAX_RANGE = 5.0; // for normalization
 
         protected double[] array;
 
-        public Observation(double linearVelocity, double angularVeocity, float[][] ranges) {
-            array = new double[2 + 2 * NUM_RANGES];
-            array[0] = linearVelocity;
-            array[1] = angularVeocity;
+        public Observation(float[] ranges, double kobukiDistance, double kobukiAngle) {
+            // in the simulator, we know kobukiDistance and kobukiAngle, but
+            // in the real world, these values need to be estimated by some other means
+            array = new double[2 * NUM_RANGES];
+            int n = (int)Math.round((kobukiAngle + Math.PI / 2) * NUM_RANGES / Math.PI);
             for (int i = 0; i < NUM_RANGES; i++) {
                 // try to map the ranges symmetrically
-                int j = (int)Math.round((i + (double)i / (NUM_RANGES - 1)) * (ranges[0].length - 1) / NUM_RANGES);
-                array[2 + i] = ranges[0][j];
-                array[2 + i + NUM_RANGES] = ranges[0][j] - ranges[1][j];
+                int j = (int)Math.round((i + (double)i / (NUM_RANGES - 1)) * (ranges.length - 1) / NUM_RANGES);
+                array[2 * i    ] = i == n ? 1.0 : ranges[j] / MAX_RANGE;
+                array[2 * i + 1] = i == n ? kobukiDistance / MAX_RANGE : 1.0;
             }
         }
 
@@ -63,8 +65,7 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
         }
     }
 
-    protected final double[] LINEAR_VELOCITIES = {0.0, 1.0, /*-1.0*/}; // m/s
-    protected final double[] ANGULAR_VELOCITIES = {0.0, Math.PI, -Math.PI}; // rad/s
+    protected final double[][] FETCH_VELOCITIES = { {1.0, 0.0}, {0.1, 1.0}, {0.1, -1.0} }; // { m/s, rad/s }
     protected final double MIDDLE_MAX_DISTANCE = 1; // m
     protected final double KOBUKI_MIN_DISTANCE = 0.5; // m
     protected final double WALL_MIN_DISTANCE = 0.5; // m
@@ -101,8 +102,8 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
             }
             ranges = controllerNode.getLaserRanges();
         }
-        discreteSpace = new DiscreteSpace(LINEAR_VELOCITIES.length * ANGULAR_VELOCITIES.length);
-        Observation o = new Observation(0, 0, ranges);
+        discreteSpace = new DiscreteSpace(FETCH_VELOCITIES.length);
+        Observation o = new Observation(ranges[0], 0, 0);
         observationSpace = new ArrayObservationSpace<Observation>(new int[] {o.toArray().length});
         done = false;
         randomSeed = seed;
@@ -130,6 +131,15 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
     @Override
     public Observation reset() {
         Observation o;
+        controllerNode.setLinearVelocity(0);
+        controllerNode.setAngularVelocity(0);
+
+        try {
+            Thread.sleep(LATENCY);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
+
         do {
             double[] fetchPose = randomPose();
             double[] kobukiPose = randomPose();
@@ -145,7 +155,7 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
             controllerNode.setKobukiPose(kobukiPose);
             done = false;
             step = 0;
-            o = step(0).getObservation();
+            o = step(-1).getObservation();
         } while (done);
 
         return o;
@@ -162,8 +172,8 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
         if (nodeMainExecutor == null) {
             return null;
         }
-        double linearVelocity = LINEAR_VELOCITIES[a % LINEAR_VELOCITIES.length];
-        double angularVelocity = ANGULAR_VELOCITIES[a / LINEAR_VELOCITIES.length];
+        double linearVelocity = a < 0 ? 0 : FETCH_VELOCITIES[a][0];
+        double angularVelocity = a < 0 ? 0 : FETCH_VELOCITIES[a][1];
         controllerNode.setLinearVelocity(linearVelocity);
         controllerNode.setAngularVelocity(angularVelocity);
 
@@ -174,9 +184,11 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
         }
 
         float[][] ranges = controllerNode.getLaserRanges();
+        double[] angles = controllerNode.getLaserAngles();
         double kobukiDistance = controllerNode.getKobukiDistance();
+        double kobukiAngle = controllerNode.getKobukiAngle();
         double wallDistance = controllerNode.getWallDistance();
-        double reward = kobukiDistance < lastKobukiDistance ? 0.01 : 0;
+        double reward = kobukiDistance < lastKobukiDistance - 0.01 ? 0.01 : 0;
         lastKobukiDistance = kobukiDistance;
         if (kobukiDistance <= KOBUKI_MIN_DISTANCE) {
             reward = 1;
@@ -187,11 +199,12 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
         } else if (step >= MAX_STEPS) {
             done = true;
         }
+
         log.info("step: " + step + " action: " + a + " (" + df.format(linearVelocity)+ ", " + df.format(angularVelocity) + ")"
                 + " kobukiDistance: " + df.format(kobukiDistance) + " wallDistance: " + df.format(wallDistance)
                 + " reward: " + reward + " done: " + done);
         step++;
-        return new StepReply(new Observation(linearVelocity, angularVelocity, ranges), reward, done, null);
+        return new StepReply(new Observation(ranges[0], kobukiDistance, kobukiAngle), reward, done, null);
     }
 
     @Override

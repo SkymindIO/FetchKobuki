@@ -46,9 +46,9 @@ public class ControllerNode extends AbstractNodeMain {
     double linearVelocity;
     double angularVelocity;
     float[][] laserRanges;
+    double[] laserAngles;
 
-    double kobukiDistance;
-    double wallDistance;
+    double kobukiDistance, kobukiAngle, wallDistance;
 
     double[] middlePose, fetchPose, kobukiPose;
     double[] lastFetchPose, lastKobukiPose;
@@ -62,9 +62,15 @@ public class ControllerNode extends AbstractNodeMain {
     float[][] getLaserRanges() {
         return laserRanges;
     }
+    double[] getLaserAngles() {
+        return laserAngles;
+    }
 
     double getKobukiDistance() {
         return kobukiDistance;
+    }
+    double getKobukiAngle() {
+        return kobukiAngle;
     }
     double getWallDistance() {
         return wallDistance;
@@ -99,6 +105,7 @@ public class ControllerNode extends AbstractNodeMain {
                 log.trace("scan times: " + message.getTimeIncrement() + " " + message.getScanTime() + " " + (time - lastTime));
                 lastTime = time;
 
+                laserAngles = new double[] { message.getAngleMin(), message.getAngleMax() };
                 laserRanges = new float[][] { message.getRanges(),
                         laserRanges != null && laserRanges[0] != null ? laserRanges[0] : null };
 
@@ -167,14 +174,18 @@ public class ControllerNode extends AbstractNodeMain {
 
                 double x1 = fetchPose.getPosition().getX();
                 double y1 = fetchPose.getPosition().getY();
+                double a1 = 2 * Math.acos(fetchPose.getOrientation().getW());
                 double x2 = kobukiPose.getPosition().getX();
                 double y2 = kobukiPose.getPosition().getY();
                 lastFetchPose = new double[] { x1, y1 };
                 lastKobukiPose = new double[] { x2, y2 };
 
-                double kobukiDist = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
-                log.trace("kobukiDist: " + df.format(kobukiDist));
-                kobukiDistance = kobukiDist;
+                kobukiDistance = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+                kobukiAngle = a1 - Math.atan2(y2 - y1, x2 - x1); // clockwise to match LaserScan
+                if (kobukiAngle > Math.PI) {
+                    kobukiAngle -= 2 * Math.PI;
+                }
+                log.trace("kobuki distance: " + df.format(kobukiDistance) + " angle: " + df.format(kobukiAngle));
 
                 count = 0;
                 double[] wallDists = new double[4];
