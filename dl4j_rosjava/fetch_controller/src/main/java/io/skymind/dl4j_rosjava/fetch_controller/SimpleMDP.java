@@ -18,6 +18,8 @@
 
 package io.skymind.dl4j_rosjava.fetch_controller;
 
+import java.io.FileWriter;
+import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.List;
@@ -46,16 +48,15 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
 
         protected double[] array;
 
-        public Observation(float[] ranges, double kobukiDistance, double kobukiAngle) {
-            // in the simulator, we know kobukiDistance and kobukiAngle, but
+        public Observation(float[] ranges, double kobukiRange, int kobukiIndex) {
+            // in the simulator, we know kobukiRange and kobukiIndex, but
             // in the real world, these values need to be estimated by some other means
             array = new double[2 * NUM_RANGES];
-            int n = (int)Math.round((kobukiAngle + Math.PI / 2) * NUM_RANGES / Math.PI);
             for (int i = 0; i < NUM_RANGES; i++) {
                 // try to map the ranges symmetrically
                 int j = (int)Math.round((i + (double)i / (NUM_RANGES - 1)) * (ranges.length - 1) / NUM_RANGES);
-                array[2 * i    ] = i == n ? 1.0 : ranges[j] / MAX_RANGE;
-                array[2 * i + 1] = i == n ? kobukiDistance / MAX_RANGE : 1.0;
+                array[2 * i    ] = i == kobukiIndex ? 1.0 : ranges[j] / MAX_RANGE;
+                array[2 * i + 1] = i == kobukiIndex ? kobukiRange / MAX_RANGE : 1.0;
             }
         }
 
@@ -200,11 +201,18 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
             done = true;
         }
 
+        // the laser is located ~28cm at the front of the base...
+        double x = kobukiDistance * Math.cos(kobukiAngle) - 0.28;
+        double y = kobukiDistance * Math.sin(kobukiAngle);
+        double r = Math.sqrt(x * x + y * y);
+        double angle = Math.atan2(y, x);
+        int n = (int)Math.round((angle - angles[0]) * ranges[0].length / (angles[1] - angles[0]));
+
         log.info("step: " + step + " action: " + a + " (" + df.format(linearVelocity)+ ", " + df.format(angularVelocity) + ")"
                 + " kobukiDistance: " + df.format(kobukiDistance) + " wallDistance: " + df.format(wallDistance)
-                + " reward: " + reward + " done: " + done);
+                + " reward: " + df.format(reward) + " done: " + done);
         step++;
-        return new StepReply(new Observation(ranges[0], kobukiDistance, kobukiAngle), reward, done, null);
+        return new StepReply(new Observation(ranges[0], r, n), reward, done, null);
     }
 
     @Override

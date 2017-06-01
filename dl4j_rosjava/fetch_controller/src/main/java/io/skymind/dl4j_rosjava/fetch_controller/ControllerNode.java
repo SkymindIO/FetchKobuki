@@ -174,7 +174,11 @@ public class ControllerNode extends AbstractNodeMain {
 
                 double x1 = fetchPose.getPosition().getX();
                 double y1 = fetchPose.getPosition().getY();
-                double a1 = 2 * Math.acos(fetchPose.getOrientation().getW());
+                double qw = fetchPose.getOrientation().getW();
+                double qx = fetchPose.getOrientation().getX();
+                double qy = fetchPose.getOrientation().getY();
+                double qz = fetchPose.getOrientation().getZ();
+                double a1 = Math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz)); // yaw
                 double x2 = kobukiPose.getPosition().getX();
                 double y2 = kobukiPose.getPosition().getY();
                 lastFetchPose = new double[] { x1, y1 };
@@ -184,6 +188,8 @@ public class ControllerNode extends AbstractNodeMain {
                 kobukiAngle = a1 - Math.atan2(y2 - y1, x2 - x1); // clockwise to match LaserScan
                 if (kobukiAngle > Math.PI) {
                     kobukiAngle -= 2 * Math.PI;
+                } else if (kobukiAngle < -Math.PI) {
+                    kobukiAngle += 2 * Math.PI;
                 }
                 log.trace("kobuki distance: " + df.format(kobukiDistance) + " angle: " + df.format(kobukiAngle));
 
