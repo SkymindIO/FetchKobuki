@@ -189,13 +189,13 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
         double kobukiDistance = controllerNode.getKobukiDistance();
         double kobukiAngle = controllerNode.getKobukiAngle();
         double wallDistance = controllerNode.getWallDistance();
-        double reward = kobukiDistance < lastKobukiDistance - 0.01 ? 0.01 : 0;
+        double reward = lastKobukiDistance - kobukiDistance;
         lastKobukiDistance = kobukiDistance;
         if (kobukiDistance <= KOBUKI_MIN_DISTANCE) {
-            reward = 1;
+            reward = 10;
             done = true;
         } else if (wallDistance <= WALL_MIN_DISTANCE) {
-            reward = -1;
+            reward = -10;
             done = true;
         } else if (step >= MAX_STEPS) {
             done = true;

@@ -43,7 +43,7 @@ public class TrainingMain {
                     32,     //size of batches
                     100,    //target update (hard)
                     10,     //num step noop warmup
-                    1.0,    //reward scaling
+                    0.1,    //reward scaling
                     0.9,    //gamma
                     10.0,   //td-error clipping
                     0.1f,   //min epsilon
@@ -67,7 +67,7 @@ public class TrainingMain {
                     5,       //t_max
                     100,     //target update (hard)
                     10,      //num step noop warmup
-                    1.0,     //reward scaling
+                    0.1,     //reward scaling
                     0.9,     //gamma
                     10.0,    //td-error clipping
                     0.1f,    //min epsilon
@@ -89,7 +89,7 @@ public class TrainingMain {
                     1,              //Number of threads
                     5,              //t_max
                     10,             //num step noop warmup
-                    1.0,            //reward scaling
+                    0.1,            //reward scaling
                     0.9,            //gamma
                     10.0            //td-error clipping
             );
