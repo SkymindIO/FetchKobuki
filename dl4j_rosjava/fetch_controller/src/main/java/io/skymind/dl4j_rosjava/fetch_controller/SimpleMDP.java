@@ -52,11 +52,12 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
             // in the simulator, we know kobukiRange and kobukiIndex, but
             // in the real world, these values need to be estimated by some other means
             array = new double[2 * NUM_RANGES];
+            int n = kobukiIndex < 0 ? -1 : kobukiIndex * NUM_RANGES / ranges.length;
             for (int i = 0; i < NUM_RANGES; i++) {
                 // try to map the ranges symmetrically
                 int j = (int)Math.round((i + (double)i / (NUM_RANGES - 1)) * (ranges.length - 1) / NUM_RANGES);
-                array[2 * i    ] = i == kobukiIndex ? 1.0 : ranges[j] / MAX_RANGE;
-                array[2 * i + 1] = i == kobukiIndex ? kobukiRange / MAX_RANGE : 1.0;
+                array[2 * i    ] = i == n ? 1.0 : ranges[j] / MAX_RANGE;
+                array[2 * i + 1] = i == n ? kobukiRange / MAX_RANGE : 1.0;
             }
         }
 
