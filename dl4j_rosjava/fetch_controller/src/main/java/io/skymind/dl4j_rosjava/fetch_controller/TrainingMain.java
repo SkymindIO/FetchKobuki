@@ -18,6 +18,7 @@
 
 package io.skymind.dl4j_rosjava.fetch_controller;
 
+import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.rl4j.learning.async.a3c.discrete.A3CDiscrete;
 import org.deeplearning4j.rl4j.learning.async.a3c.discrete.A3CDiscreteDense;
 import org.deeplearning4j.rl4j.learning.async.nstep.discrete.AsyncNStepQLearningDiscrete;
@@ -25,8 +26,11 @@ import org.deeplearning4j.rl4j.learning.async.nstep.discrete.AsyncNStepQLearning
 import org.deeplearning4j.rl4j.learning.sync.qlearning.QLearning;
 import org.deeplearning4j.rl4j.learning.sync.qlearning.discrete.QLearningDiscreteDense;
 import org.deeplearning4j.rl4j.network.ac.ActorCriticFactorySeparateStdDense;
+import org.deeplearning4j.rl4j.network.dqn.DQN;
 import org.deeplearning4j.rl4j.network.dqn.DQNFactoryStdDense;
+import org.deeplearning4j.rl4j.policy.DQNPolicy;
 import org.deeplearning4j.rl4j.util.DataManager;
+import org.deeplearning4j.util.ModelSerializer;
 
 /**
  *
@@ -101,20 +105,32 @@ public class TrainingMain {
                     .numHiddenNodes(16)
                     .numLayer(3).build();
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         //record the training data in rl4j-data in a new folder
         DataManager manager = new DataManager(true);
 
         //define the mdp from rosjava
         SimpleMDP mdp = new SimpleMDP(1235);
 
+        MultiLayerNetwork mln = args.length > 0 ? ModelSerializer.restoreMultiLayerNetwork(args[0]) : null;
+
         //define the training
-        QLearningDiscreteDense<SimpleMDP.Observation> dql = new QLearningDiscreteDense<>(mdp, QL_NET_CONF, QL_CONF, manager);
-//        AsyncNStepQLearningDiscreteDense<SimpleMDP.Observation> dql = new AsyncNStepQLearningDiscreteDense<>(mdp, NSTEP_NET_CONF, NSTEP_CONF, manager);
+        QLearningDiscreteDense<SimpleMDP.Observation> dql = mln != null
+                ? new QLearningDiscreteDense<>(mdp, new DQN(mln), QL_CONF, manager)
+                : new QLearningDiscreteDense<>(mdp, QL_NET_CONF, QL_CONF, manager);
+//        AsyncNStepQLearningDiscreteDense<SimpleMDP.Observation> dql = mln != null
+//                ? new AsyncNStepQLearningDiscreteDense<>(mdp, new DQN(mln), NSTEP_CONF, manager)
+//                : new AsyncNStepQLearningDiscreteDense<>(mdp, NSTEP_NET_CONF, NSTEP_CONF, manager);
 //        A3CDiscreteDense<SimpleMDP.Observation> dql = new A3CDiscreteDense<>(mdp, A3C_NET_CONF, A3C_CONF, manager);
 
         //start the training
         dql.train();
+
+        //get the final policy
+        DQNPolicy<SimpleMDP.Observation> pol = dql.getPolicy();
+
+        //serialize and save
+        pol.save("policy.mln");
 
         //close the mdp (http connection)
         mdp.close();

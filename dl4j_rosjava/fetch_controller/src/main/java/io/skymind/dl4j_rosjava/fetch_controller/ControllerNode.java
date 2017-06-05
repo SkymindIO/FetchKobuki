@@ -25,6 +25,7 @@ import java.text.DecimalFormat;
 import java.util.Arrays;
 import org.apache.commons.logging.Log;
 import org.ros.concurrent.CancellableLoop;
+import org.ros.concurrent.WallTimeRate;
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
@@ -229,6 +230,7 @@ public class ControllerNode extends AbstractNodeMain {
         // This CancellableLoop will be canceled automatically when the node shuts
         // down.
         connectedNode.executeCancellableLoop(new CancellableLoop() {
+            WallTimeRate rate = new WallTimeRate(10);
             private int sequenceNumber;
 
             @Override
@@ -248,13 +250,14 @@ public class ControllerNode extends AbstractNodeMain {
                 log.trace("velocity linear: " + message.getLinear().getX() + " angular:" + message.getAngular().getZ());
                 publisher.publish(message);
                 sequenceNumber++;
-                Thread.sleep(100);
+                rate.sleep();
             }
         });
 
         final Publisher<gazebo_msgs.ModelState> publisher2 =
                 connectedNode.newPublisher("gazebo/set_model_state", gazebo_msgs.ModelState._TYPE);
         connectedNode.executeCancellableLoop(new CancellableLoop() {
+            WallTimeRate rate = new WallTimeRate(10);
             org.ros.rosjava_geometry.Vector3 referenceAxis
                     = new org.ros.rosjava_geometry.Vector3(0.0, 0.0, 1.0);
 
@@ -283,7 +286,7 @@ public class ControllerNode extends AbstractNodeMain {
                     publisher2.publish(message);
                     kobukiPose = null;
                 }
-                Thread.sleep(100);
+                rate.sleep();
             }
         });
     }
