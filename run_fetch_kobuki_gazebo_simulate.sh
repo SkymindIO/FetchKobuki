@@ -1,1 +1,1 @@
-roslaunch fetch_kobuki_gazebo simulate.launch
+roslaunch fetch_kobuki_gazebo simulate.launch "$@"

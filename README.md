@@ -34,12 +34,15 @@ To be able to run the UI of Gazebo and rviz with acceptable performance inside a
 3. On Linux host, run `sudo bash VMware-Player-12.5.6-5528349.x86_64.bundle`
 4. Launch "VMware Player", from the "System Tools" application list on Linux host
 5. Click "Open a Virtual Machine" -> "ros-indigo-java.ova", and ignore the warnings
-7. Go to "Edit virtual machine settings" -> "Display", select "Accelerate 3D graphics", and increase graphics memory to >= 1 GB
-8. Click on "Save" and then on "Power On" to start the virtual machine, and ignore the warnings
-9. Select "Virtual Machine" -> "Install VMare Tools..."
+6. Go to "Edit virtual machine settings" -> "Display", select "Accelerate 3D graphics", and increase graphics memory to >= 1 GB
+7. Click on "Save" and then on "Power On" to start the virtual machine, and ignore the warnings
+8. Select "Virtual Machine" -> "Install VMare Tools..."
    - Then, inside the virtual machine, extract `VMwareTools-10.1.6-5214329.tar.gz`, run `sudo ./vmware-tools-distrib/vmware-install.pl`, type "yes", and accept all defaults
-10. After rebooting the virtual machine, Gazebo and rviz should now be a lot more responsive
-   - In case of crash, try setting `export OGRE_RTT_MODE=Copy`: http://wiki.ros.org/rviz/Troubleshooting#Segfault_during_startup
+   - Finally, turn off the VM, and update the `virtualhw.version` to "12" inside the `~/vmware/ros-indigo-java/ros-indigo-java.vmx` file on the host
+9. After rebooting the virtual machine, Gazebo and rviz should now be a lot more responsive
+   - In case of crash, try setting `export OGRE_RTT_MODE=FBO` as well as `export SVGA_VGPU10=0`:
+      - http://wiki.ros.org/rviz/Troubleshooting#Segfault_during_startup
+      - http://answers.gazebosim.org/question/13214/virtual-machine-not-launching-gazebo/
 
 Note: Inside the virtual machine, we can adjust the screen DPI ("Scale for menu and title bars") from the "Displays" window accessible by clicking the "System Settings" icon
 
@@ -68,5 +71,22 @@ $ source devel/setup.bash
 $ roslaunch fetch_kobuki_gazebo simulate.launch
 $ cd src/SoftBank_World_POC/dl4j_rosjava/fetch_controller/build/install/fetch_controller/bin/
 $ ./fetch_controller io.skymind.dl4j_rosjava.fetch_controller.ControllerNode
+```
+
+But the `ControllerNode` will not do much by itself. The main application classes are `TrainingMain` or `PlayingMain`. Some bash scripts for those commands have been prepared for convenience: `run_fetch_kobuki_gazebo_simulate.sh`, `run_fetch_controller_training.sh` and `run_fetch_controller_playing.sh`.
+
+
+### Recording and playing back Gazebo log files
+
+To record a Gazebo simulation into a log file, we need to launch `gazebo` with the `-r` command line option. The `simulate.launch` script was modified to accept an `extra_gazebo_args` argument, so we can pass it that way:
+```bash
+$ roslaunch fetch_kobuki_gazebo simulate.launch extra_gazebo_args:=-r
+```
+Log files get saved as `~/.gazebo/log/*/gzserver/state.log` by default, but we can change that:
+   - http://gazebosim.org/tutorials?tut=logging_playback
+
+To play back one of those log files, we just need to pass it to `gazebo -p`, but it is missing some model files that we typically get from `roslaunch`. We can add them back with an environment variable:
+```bash
+$ GAZEBO_MODEL_PATH=/opt/ros/indigo/share/eusurdf/models/ gazebo -p /path/to/state.log
 ```
 

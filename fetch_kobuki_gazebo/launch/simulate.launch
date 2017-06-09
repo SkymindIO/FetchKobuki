@@ -12,6 +12,7 @@
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="headless" value="$(arg headless)"/>
+    <arg name="extra_gazebo_args" value="$(arg extra_gazebo_args)"/>
     <arg name="world_name" value="$(find fetch_kobuki_gazebo)/worlds/SB_world.sdf"/>
   </include>
   <!-- include our robots -->
