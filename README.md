@@ -73,7 +73,7 @@ $ cd src/SoftBank_World_POC/dl4j_rosjava/fetch_controller/build/install/fetch_co
 $ ./fetch_controller io.skymind.dl4j_rosjava.fetch_controller.ControllerNode
 ```
 
-But the `ControllerNode` will not do much by itself. The main application classes are `TrainingMain` or `PlayingMain`. Some bash scripts for those commands have been prepared for convenience: `run_fetch_kobuki_gazebo_simulate.sh`, `run_fetch_controller_training.sh` and `run_fetch_controller_playing.sh`.
+But the `ControllerNode` will not do much by itself. The main application classes are `TrainingMain` and `PlayingMain`. Some bash scripts for those commands have been prepared for convenience: `run_fetch_kobuki_gazebo_simulate.sh`, `run_fetch_controller_training.sh`, and `run_fetch_controller_playing.sh`.
 
 
 ### Recording and playing back Gazebo log files
@@ -90,3 +90,11 @@ To play back one of those log files, we just need to pass it to `gazebo -p`, but
 $ GAZEBO_MODEL_PATH=/opt/ros/indigo/share/eusurdf/models/ gazebo -p /path/to/state.log
 ```
 
+
+### Running more than one Gazebo simulation simultaneously
+
+Each instance of Gazebo needs its own ROS master, so we need to start multiple processes of those as well. In general, we only need to set `ROS_MASTER_URI` and `GAZEBO_MASTER_URI` before starting anything related to ROS or Gazebo in the current shell. For convenience, we provide the `setup_master.sh` script that can be sourced with an integer that is added to the standard port numbers, which then sets those environment variables accordingly. There is however a bug in old versions of Gazebo, which we can fix by:
+
+1. Modifying the first line of `/usr/share/gazebo/setup.sh` to `export GAZEBO_MASTER_URI=${GAZEBO_MASTER_URI:-"http://localhost:11345"}`:
+   - https://bitbucket.org/osrf/simulator_gazebo/pull-requests/7/do-not-overwrite-gazebo_master_uri-if-one/diff
+2. Before executing `source setup_master.sh` with an integer as argument

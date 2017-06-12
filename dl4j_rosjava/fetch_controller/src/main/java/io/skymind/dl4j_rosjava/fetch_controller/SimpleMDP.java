@@ -32,6 +32,7 @@ import org.deeplearning4j.rl4j.space.ArrayObservationSpace;
 import org.deeplearning4j.rl4j.space.DiscreteSpace;
 import org.deeplearning4j.rl4j.space.Encodable;
 import org.deeplearning4j.rl4j.space.ObservationSpace;
+import org.ros.internal.loader.CommandLineLoader;
 import org.ros.node.DefaultNodeMainExecutor;
 import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
@@ -91,7 +92,7 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
 
     public SimpleMDP(long seed) {
         controllerNode = new ControllerNode();
-        nodeConfiguration = NodeConfiguration.newPublic("0.0.0.0");
+        nodeConfiguration = new CommandLineLoader(Arrays.asList(ControllerNode.class.getName())).build();
         nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
         nodeMainExecutor.execute(controllerNode, nodeConfiguration);
 
