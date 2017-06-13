@@ -230,7 +230,7 @@ public class ControllerNode extends AbstractNodeMain {
         // This CancellableLoop will be canceled automatically when the node shuts
         // down.
         connectedNode.executeCancellableLoop(new CancellableLoop() {
-            WallTimeRate rate = new WallTimeRate(10);
+            WallTimeRate rate = new WallTimeRate(20);
             private int sequenceNumber;
 
             @Override
@@ -257,7 +257,7 @@ public class ControllerNode extends AbstractNodeMain {
         final Publisher<gazebo_msgs.ModelState> publisher2 =
                 connectedNode.newPublisher("gazebo/set_model_state", gazebo_msgs.ModelState._TYPE);
         connectedNode.executeCancellableLoop(new CancellableLoop() {
-            WallTimeRate rate = new WallTimeRate(10);
+            WallTimeRate rate = new WallTimeRate(20);
             org.ros.rosjava_geometry.Vector3 referenceAxis
                     = new org.ros.rosjava_geometry.Vector3(0.0, 0.0, 1.0);
 

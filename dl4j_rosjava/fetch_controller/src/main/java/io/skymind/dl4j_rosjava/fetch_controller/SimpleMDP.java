@@ -20,6 +20,10 @@ package io.skymind.dl4j_rosjava.fetch_controller;
 
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.List;
@@ -43,22 +47,60 @@ import org.ros.node.NodeMainExecutor;
  */
 public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSpace> {
 
-    public static class Observation implements Encodable {
+    public class Observation implements Encodable {
         protected final int NUM_RANGES = 5; // subsampled from 662 values
         protected final double MAX_RANGE = 5.0; // for normalization
+        protected final double MIN_OVERLAP = 0.1; // of the target with the window
 
         protected double[] array;
 
-        public Observation(float[] ranges, double kobukiRange, int kobukiIndex) {
+        public Observation(float[] ranges, double kobukiRange, int kobukiIndex1, int kobukiIndex2) {
             // in the simulator, we know kobukiRange and kobukiIndex, but
             // in the real world, these values need to be estimated by some other means
             array = new double[2 * NUM_RANGES];
-            int n = kobukiIndex < 0 ? -1 : kobukiIndex * NUM_RANGES / ranges.length;
+            kobukiIndex1 += ranges.length * MIN_OVERLAP / NUM_RANGES;
+            kobukiIndex2 -= ranges.length * MIN_OVERLAP / NUM_RANGES;
+            int n1 = kobukiIndex1 < 0 ? -1 : kobukiIndex1 * NUM_RANGES / ranges.length;
+            int n2 = kobukiIndex2 < 0 ? -1 : kobukiIndex2 * NUM_RANGES / ranges.length;
+            boolean facingTarget = n2 >= 0 && n1 < NUM_RANGES;
+
+            double[] subranges = new double[ranges.length / NUM_RANGES + 1];
+            boolean hasModel = kobukiDetector.getModel() != null;
+
             for (int i = 0; i < NUM_RANGES; i++) {
+                boolean target = i >= n1 && i <= n2;
+                double minRange = MAX_RANGE;
+                int start = i * (subranges.length - 1);
+                for (int j = 0; j < subranges.length - 1; j++) {
+                    double r = ranges[start + j];
+                    subranges[j] = r / MAX_RANGE;
+                    if (minRange > r) {
+                        minRange = r;
+                    }
+                }
+                subranges[subranges.length - 1] = (double)i / NUM_RANGES;
+
+                if (hasModel) {
+                    target = kobukiDetector.predict(subranges);
+                    kobukiRange = minRange; //assume target is closest object
+                } else if (facingTarget && kobukiRangesWriter != null) {
+                    String line = "";
+                    for (int j = 0; j < subranges.length; j++) {
+                        line += subranges[j] + ",";
+                    }
+                    line += (target ? 1 : 0) + "\n";
+
+                    try {
+                        kobukiRangesWriter.append(line);
+                    } catch (IOException ex) {
+                        log.error(ex);
+                    }
+                }
+
                 // try to map the ranges symmetrically
                 int j = (int)Math.round((i + (double)i / (NUM_RANGES - 1)) * (ranges.length - 1) / NUM_RANGES);
-                array[2 * i    ] = i == n ? 1.0 : ranges[j] / MAX_RANGE;
-                array[2 * i + 1] = i == n ? kobukiRange / MAX_RANGE : 1.0;
+                array[2 * i    ] = target ? 1.0 : ranges[j] / MAX_RANGE;
+                array[2 * i + 1] = target ? kobukiRange / MAX_RANGE : 1.0;
             }
         }
 
@@ -78,7 +120,9 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
     protected ControllerNode controllerNode;
     protected NodeConfiguration nodeConfiguration;
     protected NodeMainExecutor nodeMainExecutor;
-    protected List<int[]> actions;
+    protected KobukiDetector kobukiDetector;
+    protected Writer kobukiRangesWriter;
+    protected Observation dummyObservation;
     protected DiscreteSpace discreteSpace;
     protected ObservationSpace<Observation> observationSpace;
     protected boolean done;
@@ -90,11 +134,22 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
     private final Log log = LogFactory.getLog(SimpleMDP.class);
     private final DecimalFormat df = new DecimalFormat("0.00");
 
-    public SimpleMDP(long seed) {
+    public SimpleMDP(KobukiDetector detector, long seed) {
         controllerNode = new ControllerNode();
         nodeConfiguration = new CommandLineLoader(Arrays.asList(ControllerNode.class.getName())).build();
         nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
         nodeMainExecutor.execute(controllerNode, nodeConfiguration);
+
+        kobukiDetector = detector;
+        if (kobukiDetector.getModel() == null) {
+            // accumulate data only if we do not already have a model
+            Path p = kobukiDetector.getDataPath().resolve(KobukiDetector.RANGES_FILENAME);
+            try {
+                kobukiRangesWriter = Files.newBufferedWriter(p, StandardCharsets.UTF_8);
+            } catch (IOException ex) {
+                log.error(ex);
+            }
+        }
 
         float[][] ranges = controllerNode.getLaserRanges();
         while (ranges == null || ranges[1] == null) {
@@ -106,8 +161,8 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
             ranges = controllerNode.getLaserRanges();
         }
         discreteSpace = new DiscreteSpace(FETCH_VELOCITIES.length);
-        Observation o = new Observation(ranges[0], 0, 0);
-        observationSpace = new ArrayObservationSpace<Observation>(new int[] {o.toArray().length});
+        dummyObservation = new Observation(ranges[0], 0, 0, 0);
+        observationSpace = new ArrayObservationSpace<Observation>(new int[] {dummyObservation.toArray().length});
         done = false;
         randomSeed = seed;
         random = new Random(seed);
@@ -133,6 +188,18 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
 
     @Override
     public Observation reset() {
+        if (nodeMainExecutor == null) {
+            return dummyObservation;
+        }
+
+        try {
+            if (kobukiRangesWriter != null) {
+                kobukiRangesWriter.flush();
+            }
+        } catch (IOException ex) {
+            log.error(ex);
+        }
+
         Observation o;
         controllerNode.setLinearVelocity(0);
         controllerNode.setAngularVelocity(0);
@@ -166,14 +233,26 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
 
     @Override
     public void close() {
-        nodeMainExecutor.shutdown();
+        if (nodeMainExecutor != null) {
+            nodeMainExecutor.shutdown();
+        }
         nodeMainExecutor = null;
+
+        try {
+            if (kobukiRangesWriter != null) {
+                kobukiRangesWriter.close();
+            }
+        } catch (IOException ex) {
+            log.error(ex);
+        } finally {
+            kobukiRangesWriter = null;
+        }
     }
 
     @Override
     public StepReply<Observation> step(Integer a) {
         if (nodeMainExecutor == null) {
-            return null;
+            return new StepReply(dummyObservation, 0, done, null);
         }
         double linearVelocity = a < 0 ? 0 : FETCH_VELOCITIES[a][0];
         double angularVelocity = a < 0 ? 0 : FETCH_VELOCITIES[a][1];
@@ -208,13 +287,21 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
         double y = kobukiDistance * Math.sin(kobukiAngle);
         double r = Math.sqrt(x * x + y * y);
         double angle = Math.atan2(y, x);
+
+        // the kobuki is about 35 cm in diameter
+        double dangle = Math.atan2(0.35 / 2, kobukiDistance);
+        double angle1 = angle - dangle;
+        double angle2 = angle + dangle;
+
         int n = (int)Math.round((angle - angles[0]) * ranges[0].length / (angles[1] - angles[0]));
+        int n1 = (int)Math.round((angle1 - angles[0]) * ranges[0].length / (angles[1] - angles[0]));
+        int n2 = (int)Math.round((angle2 - angles[0]) * ranges[0].length / (angles[1] - angles[0]));
 
         log.info("step: " + step + " action: " + a + " (" + df.format(linearVelocity)+ ", " + df.format(angularVelocity) + ")"
                 + " kobukiDistance: " + df.format(kobukiDistance) + " wallDistance: " + df.format(wallDistance)
                 + " reward: " + df.format(reward) + " done: " + done);
         step++;
-        return new StepReply(new Observation(ranges[0], r, n), reward, done, null);
+        return new StepReply(new Observation(ranges[0], r, n1, n2), reward, done, null);
     }
 
     @Override
@@ -227,7 +314,7 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
         // shut down this node to avoid interference with the single simulator
         nodeMainExecutor.shutdown();
         nodeMainExecutor = null;
-        return new SimpleMDP(randomSeed);
+        return new SimpleMDP(kobukiDetector, randomSeed);
     }
 
 }

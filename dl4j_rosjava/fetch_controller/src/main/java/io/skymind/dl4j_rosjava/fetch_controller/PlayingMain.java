@@ -17,6 +17,7 @@
  */
 package io.skymind.dl4j_rosjava.fetch_controller;
 
+import java.io.File;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
@@ -33,11 +34,20 @@ public class PlayingMain {
     private static final Log log = LogFactory.getLog(PlayingMain.class);
 
     public static void main(String[] args) throws Exception {
+        if (args.length < 1) {
+            System.err.println("Please specify the data directory.");
+            System.exit(1);
+        }
+        String dataDir = args[0];
+
+        //get a detector, if a model is available
+        KobukiDetector kobukiDetector = new KobukiDetector(dataDir);
+
         //define the mdp from rosjava
-        SimpleMDP mdp = new SimpleMDP(1235);
+        SimpleMDP mdp = new SimpleMDP(kobukiDetector, 1235);
 
         //load the previous agent
-        MultiLayerNetwork mln = ModelSerializer.restoreMultiLayerNetwork(args.length > 0 ? args[0] : "policy.mln");
+        MultiLayerNetwork mln = ModelSerializer.restoreMultiLayerNetwork(new File(dataDir, TrainingMain.POLICY_FILENAME));
         Policy<SimpleMDP.Observation, Integer> pol = new DQNPolicy<SimpleMDP.Observation>(new DQN(mln));
 
         //evaluate the agent
@@ -49,7 +59,7 @@ public class PlayingMain {
             log.info("Reward: " + reward);
         }
 
-        log.info("average: " + rewards/1000);
+        log.info("Average reward: " + rewards / 1000);
 
         //close the mdp (http connection)
         mdp.close();

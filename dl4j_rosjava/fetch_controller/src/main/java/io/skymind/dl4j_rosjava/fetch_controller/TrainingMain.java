@@ -18,6 +18,9 @@
 
 package io.skymind.dl4j_rosjava.fetch_controller;
 
+import java.io.File;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.rl4j.learning.async.a3c.discrete.A3CDiscrete;
 import org.deeplearning4j.rl4j.learning.async.a3c.discrete.A3CDiscreteDense;
@@ -37,6 +40,9 @@ import org.deeplearning4j.util.ModelSerializer;
  * @author saudet
  */
 public class TrainingMain {
+    private static final Log log = LogFactory.getLog(PlayingMain.class);
+
+    public static final String POLICY_FILENAME = "fetch_policy.model";
 
     public static QLearning.QLConfiguration QL_CONF =
             new QLearning.QLConfiguration(
@@ -106,13 +112,23 @@ public class TrainingMain {
                     .numLayer(3).build();
 
     public static void main(String[] args) throws Exception {
+        if (args.length < 1) {
+            System.err.println("Please specify the data directory.");
+            System.exit(1);
+        }
+        String dataDir = args[0];
+
+        //get a detector, if a model is available
+        KobukiDetector kobukiDetector = new KobukiDetector(dataDir);
+
         //record the training data in rl4j-data in a new folder
         DataManager manager = new DataManager(true);
 
         //define the mdp from rosjava
-        SimpleMDP mdp = new SimpleMDP(1235);
+        SimpleMDP mdp = new SimpleMDP(kobukiDetector, 1235);
 
-        MultiLayerNetwork mln = args.length > 0 ? ModelSerializer.restoreMultiLayerNetwork(args[0]) : null;
+        File policyFile = new File(dataDir, POLICY_FILENAME);
+        MultiLayerNetwork mln = policyFile.exists() ? ModelSerializer.restoreMultiLayerNetwork(policyFile) : null;
 
         //define the training
         QLearningDiscreteDense<SimpleMDP.Observation> dql = mln != null
@@ -130,9 +146,15 @@ public class TrainingMain {
         DQNPolicy<SimpleMDP.Observation> pol = dql.getPolicy();
 
         //serialize and save
-        pol.save("policy.mln");
+        log.info("Saving " + policyFile);
+        pol.save(policyFile.getPath());
 
         //close the mdp (http connection)
         mdp.close();
+
+        //also train the detector if it doesn't have a model already
+        if (kobukiDetector.getModel() == null) {
+            kobukiDetector.train();
+        }
     }
 }
