@@ -48,9 +48,9 @@ import org.ros.node.NodeMainExecutor;
 public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSpace> {
 
     public class Observation implements Encodable {
-        protected final int NUM_RANGES = 5; // subsampled from 662 values
-        protected final double MAX_RANGE = 5.0; // for normalization
-        protected final double MIN_OVERLAP = 0.1; // of the target with the window
+        public static final int NUM_RANGES = 5; // subsampled from 662 values
+        public static final double MAX_RANGE = 5.0; // for normalization
+        public static final double MIN_OVERLAP = 0.1; // of the target with the window
 
         protected double[] array;
 
@@ -110,12 +110,12 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
         }
     }
 
-    protected final double[][] FETCH_VELOCITIES = { {1.0, 0.0}, {0.1, 1.0}, {0.1, -1.0} }; // { m/s, rad/s }
-    protected final double MIDDLE_MAX_DISTANCE = 1; // m
-    protected final double KOBUKI_MIN_DISTANCE = 0.5; // m
-    protected final double WALL_MIN_DISTANCE = 0.5; // m
-    protected final long LATENCY = 500; // ms
-    protected final int MAX_STEPS = 100;
+    public static final double[][] FETCH_VELOCITIES = { {1.0, 0.0}, {0.1, 1.0}, {0.1, -1.0} }; // { m/s, rad/s }
+    public static final double MIDDLE_MAX_DISTANCE = 1; // m
+    public static final double KOBUKI_MIN_DISTANCE = 0.5; // m
+    public static final double WALL_MIN_DISTANCE = 0.5; // m
+    public static final long LATENCY = 500; // ms
+    public static final int MAX_STEPS = 100;
 
     protected ControllerNode controllerNode;
     protected NodeConfiguration nodeConfiguration;
@@ -307,6 +307,10 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
     @Override
     public boolean isDone() {
         return done;
+    }
+
+    public int getStep() {
+        return step;
     }
 
     @Override

@@ -51,15 +51,26 @@ public class PlayingMain {
         Policy<SimpleMDP.Observation, Integer> pol = new DQNPolicy<SimpleMDP.Observation>(new DQN(mln));
 
         //evaluate the agent
+        int episodes = 100;
+        int failures = 0;
+        int steps = 0;
+        int terminations = 0;
         double rewards = 0;
-        for (int i = 0; i < 1000; i++) {
-            mdp.reset();
+        for (int i = 0; i < episodes; i++) {
             double reward = pol.play(mdp);
+            if (reward < 0) {
+                failures++;
+            }
+            if (mdp.getStep() >= SimpleMDP.MAX_STEPS) {
+                terminations++;
+            }
+            steps += mdp.getStep();
             rewards += reward;
-            log.info("Reward: " + reward);
+            log.info("Steps: " + mdp.getStep() + " Reward: " + reward);
         }
 
-        log.info("Average reward: " + rewards / 1000);
+        log.info("Failures: " + failures + " Terminations: " + terminations
+                + " Averate steps: " + (float)steps / episodes + " Average reward: " + (float)rewards / episodes);
 
         //close the mdp (http connection)
         mdp.close();
