@@ -66,6 +66,15 @@ public class KobukiDetector {
     private File modelFile;
     private MultiLayerNetwork model;
 
+    private String suffix = "";
+    private int seed = 123;
+    private double learningRate = 0.01;
+    private double l2Regularization = 0.0001;
+    private int batchSize = 100;
+    private int nEpochs = 20;
+    private int numLayers = 3;
+    private int numHiddenNodes = 100;
+
     public Path getDataPath() {
         return dataPath;
     }
@@ -76,7 +85,7 @@ public class KobukiDetector {
 
     public KobukiDetector(String dataDir) throws IOException {
         dataPath = Paths.get(dataDir);
-        modelFile = new File(dataDir, MODEL_FILENAME);
+        modelFile = new File(dataDir, MODEL_FILENAME + suffix);
         model = modelFile.exists() ? ModelSerializer.restoreMultiLayerNetwork(modelFile) : null;
     }
 
@@ -86,12 +95,6 @@ public class KobukiDetector {
     }
 
     public void train() throws InterruptedException, IOException {
-        int seed = 123;
-        double learningRate = 0.01;
-        double l2Regularization = 0.0001;
-        int batchSize = 100;
-        int nEpochs = 10;
-
         //Split data into training and testing sets:
         List<String> allLines = Files.readAllLines(dataPath.resolve(RANGES_FILENAME), StandardCharsets.UTF_8);
         int rows = allLines.size();
@@ -106,7 +109,6 @@ public class KobukiDetector {
 
         int numInputs = columns - 1;
         int numOutputs = 2;
-        int numHiddenNodes = 100;
 
         //Load the training data:
         RecordReader rr = new CSVRecordReader();
@@ -118,7 +120,7 @@ public class KobukiDetector {
         rrTest.initialize(new FileSplit(dataPath.resolve(TEST_FILENAME).toFile()));
         DataSetIterator testIter = new RecordReaderDataSetIterator(rrTest, batchSize, -1, 2);
 
-        MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
+        NeuralNetConfiguration.ListBuilder listBuilder = new NeuralNetConfiguration.Builder()
                 .seed(seed)
                 .iterations(1)
                 .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
@@ -129,8 +131,17 @@ public class KobukiDetector {
                 .layer(0, new DenseLayer.Builder().nIn(numInputs).nOut(numHiddenNodes)
                         .weightInit(WeightInit.XAVIER)
                         .activation(Activation.RELU)
-                        .build())
-                .layer(1, new OutputLayer.Builder(LossFunction.NEGATIVELOGLIKELIHOOD)
+                        .build());
+
+        for (int i = 1; i < numLayers; i++) {
+            listBuilder.layer(i, new DenseLayer.Builder().nIn(numHiddenNodes).nOut(numHiddenNodes)
+                    .weightInit(WeightInit.XAVIER)
+                    .activation(Activation.RELU)
+                    .build());
+        }
+
+        MultiLayerConfiguration conf = listBuilder
+                .layer(numLayers, new OutputLayer.Builder(LossFunction.NEGATIVELOGLIKELIHOOD)
                         .weightInit(WeightInit.XAVIER)
                         .activation(Activation.SOFTMAX)
                         .nIn(numHiddenNodes).nOut(numOutputs).build())
@@ -152,12 +163,17 @@ public class KobukiDetector {
             }
             testIter.reset();
 
+            String stats = eval.stats();
+
             //Print the evaluation statistics
-            log.info(eval.stats());
+            log.info(stats);
+
+            Files.write(dataPath.resolve("eval_stats_" + n + ".txt" + suffix), stats.getBytes());
         }
 
-        log.info("Saving " + modelFile);
-        ModelSerializer.writeModel(model, modelFile, true);
+        File f = dataPath.resolve(MODEL_FILENAME + suffix).toFile();
+        log.info("Saving " + f);
+        ModelSerializer.writeModel(model, f, true);
     }
 
     public static void main(String[] args) throws Exception {
@@ -165,6 +181,21 @@ public class KobukiDetector {
             System.err.println("Please specify the data directory.");
             System.exit(1);
         }
-        new KobukiDetector(args[0]).train();
+
+        for (double learningRate : new double[] {0.001, 0.005, 0.01, 0.015, 0.02}) {
+            for (double l2Regularization : new double[] {1e-5, 1e-4, 1e-3}) {
+                for (int numLayers : new int[] {1, 2, 3, 4}) {
+                    for (int numHiddenNodes : new int[] {32, 64, 128, 256, 512}) {
+                        KobukiDetector kb = new KobukiDetector(args[0]);
+                        kb.suffix = "_" + learningRate + "_" + l2Regularization + "_" + numLayers + "_" + numHiddenNodes;
+                        kb.learningRate = learningRate;
+                        kb.l2Regularization = l2Regularization;
+                        kb.numLayers = numLayers;
+                        kb.numHiddenNodes = numHiddenNodes;
+                        kb.train();
+                    }
+                }
+            }
+        }
     }
 }
