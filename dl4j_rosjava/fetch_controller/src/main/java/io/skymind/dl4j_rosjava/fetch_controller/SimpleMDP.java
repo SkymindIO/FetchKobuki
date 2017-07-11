@@ -55,8 +55,8 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
         protected double[] array;
 
         public Observation(float[] ranges, double kobukiRange, int kobukiIndex1, int kobukiIndex2) {
-            // in the simulator, we know kobukiRange and kobukiIndex, but
-            // in the real world, these values need to be estimated by some other means
+            // in the simulator, we know kobukiRange, kobukiIndex1, and kobukiIndex2, but
+            // in the real world, these values will not be provided, requiring a KobukiDetector instead
             array = new double[2 * NUM_RANGES];
             kobukiIndex1 += ranges.length * MIN_OVERLAP / NUM_RANGES;
             kobukiIndex2 -= ranges.length * MIN_OVERLAP / NUM_RANGES;
@@ -126,6 +126,7 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
     protected DiscreteSpace discreteSpace;
     protected ObservationSpace<Observation> observationSpace;
     protected boolean done;
+    protected int resetSleepSeconds;
     protected long randomSeed;
     protected Random random;
     protected int step;
@@ -134,7 +135,7 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
     private final Log log = LogFactory.getLog(SimpleMDP.class);
     private final DecimalFormat df = new DecimalFormat("0.00");
 
-    public SimpleMDP(KobukiDetector detector, long seed) {
+    public SimpleMDP(KobukiDetector detector, int resetSeconds, long seed) {
         controllerNode = new ControllerNode();
         nodeConfiguration = new CommandLineLoader(Arrays.asList(ControllerNode.class.getName())).build();
         nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
@@ -167,6 +168,11 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
         randomSeed = seed;
         random = new Random(seed);
         step = 0;
+        if (resetSeconds > 0) {
+            // hard reset only once
+            reset();
+            resetSleepSeconds = resetSeconds;
+        }
     }
 
     @Override
@@ -200,6 +206,26 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
             log.error(ex);
         }
 
+        if (resetSleepSeconds > 0) {
+            // back away and wait a bit
+            controllerNode.setFetchState(ControllerNode.FetchState.WAITING);
+            controllerNode.setLinearVelocity(-0.1);
+            controllerNode.setAngularVelocity(0);
+
+            try {
+                Thread.sleep(resetSleepSeconds * 1000);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+            }
+
+            controllerNode.setFetchState(ControllerNode.FetchState.CHASING);
+            controllerNode.setLinearVelocity(0);
+            controllerNode.setAngularVelocity(0);
+            done = false;
+            step = 0;
+            return step(-1).getObservation();
+        }
+
         Observation o;
         controllerNode.setLinearVelocity(0);
         controllerNode.setAngularVelocity(0);
@@ -210,6 +236,7 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
             Thread.currentThread().interrupt();
         }
 
+        // do a hard reset for efficiency
         do {
             double[] fetchPose = randomPose();
             double[] kobukiPose = randomPose();
@@ -275,7 +302,8 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
         if (kobukiDistance <= KOBUKI_MIN_DISTANCE) {
             reward = 10;
             done = true;
-        } else if (wallDistance <= WALL_MIN_DISTANCE) {
+        } else if (wallDistance <= WALL_MIN_DISTANCE && resetSleepSeconds <= 0) {
+            // only useful at training time or when doing hard resets
             reward = -10;
             done = true;
         } else if (step >= MAX_STEPS) {
@@ -318,7 +346,7 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
         // shut down this node to avoid interference with the single simulator
         nodeMainExecutor.shutdown();
         nodeMainExecutor = null;
-        return new SimpleMDP(kobukiDetector, randomSeed);
+        return new SimpleMDP(kobukiDetector, resetSleepSeconds, randomSeed);
     }
 
 }

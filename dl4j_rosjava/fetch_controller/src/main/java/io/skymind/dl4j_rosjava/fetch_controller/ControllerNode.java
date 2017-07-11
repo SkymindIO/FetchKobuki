@@ -42,6 +42,11 @@ import org.ros.node.topic.Subscriber;
  */
 public class ControllerNode extends AbstractNodeMain {
 
+    public enum FetchState {
+        CHASING,
+        WAITING
+    }
+
     private final DecimalFormat df = new DecimalFormat("0.00");
 
     double linearVelocity;
@@ -53,6 +58,7 @@ public class ControllerNode extends AbstractNodeMain {
 
     double[] middlePose, fetchPose, kobukiPose;
     double[] lastFetchPose, lastKobukiPose;
+    FetchState fetchState = FetchState.CHASING;
 
     void setLinearVelocity(double linearVelocity) {
         this.linearVelocity = linearVelocity;
@@ -85,6 +91,10 @@ public class ControllerNode extends AbstractNodeMain {
     }
     void setKobukiPose(double... pose) {
         kobukiPose = pose;
+    }
+
+    void setFetchState(FetchState state) {
+        fetchState = state;
     }
 
     @Override
@@ -231,25 +241,16 @@ public class ControllerNode extends AbstractNodeMain {
         // down.
         connectedNode.executeCancellableLoop(new CancellableLoop() {
             WallTimeRate rate = new WallTimeRate(20);
-            private int sequenceNumber;
-
-            @Override
-            protected void setup() {
-                sequenceNumber = 0;
-            }
 
             @Override
             protected void loop() throws InterruptedException {
                 geometry_msgs.Twist message = publisher.newMessage();
                 geometry_msgs.Vector3 linear = message.getLinear();
                 geometry_msgs.Vector3 angular = message.getAngular();
-//                linear.setX(10.0 / sequenceNumber);
-//                angular.setZ(10.0 / sequenceNumber);
                 linear.setX(linearVelocity);
                 angular.setZ(angularVelocity);
                 log.trace("velocity linear: " + message.getLinear().getX() + " angular:" + message.getAngular().getZ());
                 publisher.publish(message);
-                sequenceNumber++;
                 rate.sleep();
             }
         });
@@ -289,5 +290,20 @@ public class ControllerNode extends AbstractNodeMain {
                 rate.sleep();
             }
         });
+
+        final Publisher<std_msgs.String> publisher3 =
+                connectedNode.newPublisher("dl4j_rosjava/fetch_state", std_msgs.String._TYPE);
+        connectedNode.executeCancellableLoop(new CancellableLoop() {
+            WallTimeRate rate = new WallTimeRate(100);
+
+            @Override
+            protected void loop() throws InterruptedException {
+                std_msgs.String str = publisher3.newMessage();
+                str.setData(fetchState.toString());
+                publisher3.publish(str);
+                rate.sleep();
+            }
+        });
+
     }
 }

@@ -125,7 +125,7 @@ public class TrainingMain {
         DataManager manager = new DataManager(true);
 
         //define the mdp from rosjava
-        SimpleMDP mdp = new SimpleMDP(kobukiDetector, 1235);
+        SimpleMDP mdp = new SimpleMDP(kobukiDetector, 0, 1235);
 
         File policyFile = new File(dataDir, POLICY_FILENAME);
         MultiLayerNetwork mln = policyFile.exists() ? ModelSerializer.restoreMultiLayerNetwork(policyFile) : null;

@@ -44,7 +44,7 @@ public class PlayingMain {
         KobukiDetector kobukiDetector = new KobukiDetector(dataDir);
 
         //define the mdp from rosjava
-        SimpleMDP mdp = new SimpleMDP(kobukiDetector, 1235);
+        SimpleMDP mdp = new SimpleMDP(kobukiDetector, 10, 1235);
 
         //load the previous agent
         MultiLayerNetwork mln = ModelSerializer.restoreMultiLayerNetwork(new File(dataDir, TrainingMain.POLICY_FILENAME));
