@@ -65,7 +65,7 @@ public class TrainingMain {
             DQNFactoryStdDense.Configuration.builder()
                     .learningRate(1e-3)
                     .l2(1e-4)
-                    .numHiddenNodes(16)
+                    .numHiddenNodes(100)
                     .numLayer(3).build();
 
     public static AsyncNStepQLearningDiscrete.AsyncNStepQLConfiguration NSTEP_CONF =
@@ -88,7 +88,7 @@ public class TrainingMain {
             DQNFactoryStdDense.Configuration.builder()
                     .learningRate(1e-3)
                     .l2(1e-4)
-                    .numHiddenNodes(16)
+                    .numHiddenNodes(100)
                     .numLayer(3).build();
 
     private static A3CDiscrete.A3CConfiguration A3C_CONF =
@@ -108,7 +108,7 @@ public class TrainingMain {
             ActorCriticFactorySeparateStdDense.Configuration.builder()
                     .learningRate(1e-3)
                     .l2(1e-4)
-                    .numHiddenNodes(16)
+                    .numHiddenNodes(100)
                     .numLayer(3).build();
 
     public static void main(String[] args) throws Exception {

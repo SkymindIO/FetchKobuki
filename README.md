@@ -5,7 +5,7 @@ SoftBank World Demo POC
 Build Instructions
 ------------------
 
-To run this project, we first need to install ROS Indigo along with rosjava on Ubuntu 14.04. We can either [install from scratch](#install-from-scratch) or [set up a virtual machine](#set-up-a-virtual-machine) with everything already installed to run locally with OpenGL.
+To run this project, we first need to install ROS Indigo along with rosjava on Ubuntu 14.04. We can either [install from scratch](#install-from-scratch) or [set up a virtual machine](#set-up-a-virtual-machine) with everything already installed to run locally with OpenGL. After which, one can start [using the programs](USAGE.md).
 
 
 ### Install from Scratch
