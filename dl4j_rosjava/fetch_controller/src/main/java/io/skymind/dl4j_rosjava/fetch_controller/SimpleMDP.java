@@ -302,6 +302,18 @@ public class SimpleMDP implements MDP<SimpleMDP.Observation, Integer, DiscreteSp
         if (kobukiDistance <= KOBUKI_MIN_DISTANCE) {
             reward = 10;
             done = true;
+
+            if (resetSleepSeconds > 0) {
+                controllerNode.setFetchState(ControllerNode.FetchState.CATCHING);
+                controllerNode.setLinearVelocity(0);
+                controllerNode.setAngularVelocity(0);
+
+                try {
+                    Thread.sleep(resetSleepSeconds * 1000 / 10);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                }
+            }
         } else if (wallDistance <= WALL_MIN_DISTANCE && resetSleepSeconds <= 0) {
             // only useful at training time or when doing hard resets
             reward = -10;

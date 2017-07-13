@@ -44,6 +44,7 @@ public class ControllerNode extends AbstractNodeMain {
 
     public enum FetchState {
         CHASING,
+        CATCHING,
         WAITING
     }
 
