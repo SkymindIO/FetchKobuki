@@ -1,6 +1,10 @@
 Skymind-Softbank Fetch Demo
 =======================
 
+Video here:
+https://twitter.com/agibsonccc/status/887866850817654784
+
+
 
 Build Instructions
 ------------------
